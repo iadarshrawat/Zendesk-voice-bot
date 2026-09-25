@@ -1,0 +1,26 @@
+{
+  "name": "livekit-rag-voice-backend",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "LiveKit voice agent powered directly by the existing Claude, Voyage AI, and Azure Cosmos DB RAG pipeline.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env.local server.js dev",
+    "start": "node --env-file-if-exists=.env.local server.js start",
+    "test": "node --test test/**/*.test.js",
+    "check": "npm test",
+    "rag:check": "node --env-file-if-exists=.env.local scripts/checkRagQuestion.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.98.0",
+    "@azure/cosmos": "^4.10.0",
+    "@livekit/agents": "^1.9.0",
+    "@livekit/plugins-ai-coustics": "^0.2.14",
+    "@livekit/rtc-node": "^0.13.34",
+    "axios": "^1.20.0",
+    "dotenv": "^17.4.1"
+  }
+}
