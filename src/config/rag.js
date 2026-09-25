@@ -65,7 +65,10 @@ export const RAG_CONFIG = {
     queryPlanningEnabled: booleanValue(process.env.RAG_QUERY_PLANNING_ENABLED, true),
     plannerTimeoutMs: positiveInteger(process.env.RAG_PLANNER_TIMEOUT_MS, 20_000),
     answerTimeoutMs: positiveInteger(process.env.RAG_ANSWER_TIMEOUT_MS, 60_000),
-    answerMaxTokens: Math.min(8192, positiveInteger(process.env.RAG_ANSWER_MAX_TOKENS, 4096)),
+    // Voice replies should be short (2–4 sentences).  1024 tokens is ample
+    // for even detailed answers while keeping generation time low.  The hard
+    // ceiling matches the Math.min() guard above.
+    answerMaxTokens: Math.min(8192, positiveInteger(process.env.RAG_ANSWER_MAX_TOKENS, 1024)),
     recoveryEnabled: booleanValue(process.env.RAG_RECOVERY_ENABLED, true),
     maxRecoveryQueries: Math.min(3, positiveInteger(process.env.RAG_MAX_RECOVERY_QUERIES, 3)),
     catalogCacheMs: nonNegativeInteger(process.env.RAG_CATALOG_CACHE_MS, 60_000),

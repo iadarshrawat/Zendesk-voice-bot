@@ -48,8 +48,11 @@ export function loadVoiceConfig(env = process.env) {
     beginMessage: optionalValue(env.BEGIN_MESSAGE)
       ?? "Hello! Welcome to customer support. How can I help you today?",
     thinkingMessage: optionalValue(env.VOICE_THINKING_MESSAGE)
-      ?? "One moment while I check that for you. ",
-    thinkingDelayMs: integerValue(env.VOICE_THINKING_DELAY_MS, 500, { min: 0, max: 10_000 }),
+      ?? "One moment while I check that for you.",
+    // 2 500 ms gives fast paths (greetings, simple conversational turns) enough
+    // time to reply before this fires.  Only genuine RAG lookups will ever
+    // trigger it.  Operators can lower the value via VOICE_THINKING_DELAY_MS.
+    thinkingDelayMs: integerValue(env.VOICE_THINKING_DELAY_MS, 2_500, { min: 0, max: 10_000 }),
     reminderMessage: optionalValue(env.VOICE_REMINDER_MESSAGE)
       ?? "Are you still there? Please let me know how I can help.",
     noQuestionMessage: optionalValue(env.VOICE_NO_QUESTION_MESSAGE)
@@ -60,7 +63,9 @@ export function loadVoiceConfig(env = process.env) {
       ?? "That check is taking longer than expected. Please try asking again.",
     defaultBrand: optionalValue(env.VOICE_SUPPORT_BRAND) ?? "Mr Brand",
     maxHistoryChars: integerValue(env.VOICE_HISTORY_MAX_CHARS, 16_000, { min: 1_000, max: 100_000 }),
-    responseTargetMs: integerValue(env.VOICE_RESPONSE_TARGET_MS ?? env.BOT_RESPONSE_TARGET_MS, 15_000,
+    // Tighter target gives the budget more pressure to skip optional pipeline
+    // stages (e.g. citation repair) and surface a reply sooner.
+    responseTargetMs: integerValue(env.VOICE_RESPONSE_TARGET_MS ?? env.BOT_RESPONSE_TARGET_MS, 12_000,
       { min: 3_000, max: 60_000 }),
     responseHardTimeoutMs: integerValue(env.VOICE_RESPONSE_HARD_TIMEOUT_MS ?? env.BOT_RESPONSE_HARD_TIMEOUT_MS, 45_000,
       { min: 5_000, max: 120_000 }),

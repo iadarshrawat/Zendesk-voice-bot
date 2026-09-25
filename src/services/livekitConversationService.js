@@ -6,9 +6,25 @@ import {
   isResponseTimeout,
   runWithResponseBudget,
 } from "../utils/responseBudget.js";
+import { buildHeuristicQueryPlan } from "../utils/queryPlan.js";
+import { generateConversationalReply } from "./conversationalFastPath.js";
 
 function safeQuestion(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * Quick heuristic: is this a conversational turn that needs no RAG lookup?
+ * We use the same lightweight planner that already runs inside the retrieval
+ * pipeline so the classification is always consistent.
+ */
+function isFastPathTurn(question) {
+  try {
+    const plan = buildHeuristicQueryPlan(question);
+    return plan.turnType === "conversation" || plan.supportGoal === "conversation";
+  } catch {
+    return false;
+  }
 }
 
 export class LiveKitConversationService {
@@ -39,6 +55,39 @@ export class LiveKitConversationService {
 
     this.cancelActiveTurn();
     this.transcript.push({ role: "user", content: question });
+
+    // ── Fast path ──────────────────────────────────────────────────────────
+    // Greetings, thank-yous, and other purely conversational turns carry no
+    // retrieval need.  Skip the full RAG pipeline and reply directly with a
+    // tiny Haiku call so the caller hears an answer in ~1 s with no
+    // "please wait" message.
+    if (isFastPathTurn(question)) {
+      const turnNumber = ++this.turnCounter;
+      const traceId = `${this.tracePrefix}:${turnNumber}:fast`;
+      const turn = { turnNumber, traceId, budget: null, thinkingTimer: null };
+      this.activeTurn = turn;
+      try {
+        const reply = await generateConversationalReply({
+          brand: this.brand.displayName,
+          question,
+          history: this.transcript.slice(-6).map((m) => `${m.role}: ${m.content}`).join("\n"),
+        });
+        if (this.activeTurn !== turn) return null;
+        const spokenReply = reply || this.appConfig.errorMessage;
+        this.transcript.push({ role: "agent", content: spokenReply });
+        this.safeSpeak(spokenReply, { kind: "answer" });
+        console.log("[livekit:fast] Conversational reply", { traceId, brand: this.brand.key });
+        return spokenReply;
+      } catch (error) {
+        if (this.activeTurn !== turn) return null;
+        // Fall through to the full RAG pipeline on any error.
+        console.warn("[livekit:fast] Fast-path failed, falling back to RAG:", error?.message);
+        this.transcript.pop(); // remove the user turn we pushed; RAG will re-push it
+      } finally {
+        if (this.activeTurn === turn) this.activeTurn = null;
+      }
+    }
+    // ── Full RAG pipeline ──────────────────────────────────────────────────
     const turnInput = buildRagTurn(this.transcript, this.appConfig.maxHistoryChars);
     const turnNumber = ++this.turnCounter;
     const traceId = `${this.tracePrefix}:${turnNumber}`;
@@ -138,7 +187,8 @@ export class LiveKitConversationService {
   cancelActiveTurn() {
     if (!this.activeTurn) return;
     clearTimeout(this.activeTurn.thinkingTimer);
-    this.activeTurn.budget.cancel("external_abort");
+    // Fast-path turns have no budget; only cancel if one exists.
+    this.activeTurn.budget?.cancel("external_abort");
     this.activeTurn = null;
   }
 
